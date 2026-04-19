@@ -1,0 +1,191 @@
+use clap::{Parser, ValueEnum};
+
+#[derive(Debug, Clone, Copy, ValueEnum, PartialEq, Eq)]
+pub enum SimulationMode {
+    #[value(name = "2d")]
+    TwoD,
+    #[value(name = "3d")]
+    ThreeD,
+}
+
+#[derive(Parser, Debug, Clone)]
+#[command(author, version, about = "BedRock single-substance tension-field prototype")]
+pub struct Config {
+    #[arg(long, value_enum, default_value_t = SimulationMode::ThreeD)]
+    pub mode: SimulationMode,
+
+    #[arg(long, default_value_t = 960)]
+    pub width: usize,
+
+    #[arg(long, default_value_t = 720)]
+    pub height: usize,
+
+    #[arg(long, default_value_t = 720.0)]
+    pub depth: f32,
+
+    #[arg(long, default_value_t = 48000)]
+    pub particle_count: usize,
+
+    #[arg(long, default_value_t = 120000)]
+    pub particle_count_3d: usize,
+
+    #[arg(long, default_value_t = 1.0)]
+    pub ambient_tension: f32,
+
+    #[arg(long, default_value_t = 0.72)]
+    pub attraction_strength: f32,
+
+    #[arg(long, default_value_t = 0.38)]
+    pub density_reactivity: f32,
+
+    #[arg(long, default_value_t = 0.42)]
+    pub density_force_gain: f32,
+
+    #[arg(long, default_value_t = 1.12)]
+    pub merge_density_threshold: f32,
+
+    #[arg(long, default_value_t = 0.75)]
+    pub merge_influence_gain: f32,
+
+    #[arg(long, default_value_t = 0.55)]
+    pub attraction_ramp_gain: f32,
+
+    #[arg(long, default_value_t = 0.42)]
+    pub micro_pop_threshold: f32,
+
+    #[arg(long, default_value_t = 0.34)]
+    pub micro_pop_release: f32,
+
+    #[arg(long, default_value_t = 0.28)]
+    pub flow_coupling: f32,
+
+    #[arg(long, default_value_t = 0.32)]
+    pub collapse_gain: f32,
+
+    #[arg(long, default_value_t = 1.12)]
+    pub breach_threshold_base: f32,
+
+    #[arg(long, default_value_t = 2.2)]
+    pub curvature_scale: f32,
+
+    #[arg(long, default_value_t = 16.0)]
+    pub interaction_radius: f32,
+
+    #[arg(long, default_value_t = 220.0)]
+    pub signal_speed: f32,
+
+    #[arg(long, default_value_t = 0.68)]
+    pub shell_source_scale: f32,
+
+    #[arg(long, default_value_t = 1.4)]
+    pub shell_overlap_gain: f32,
+
+    #[arg(long, default_value_t = 0.28)]
+    pub spike_threshold: f32,
+
+    #[arg(long, default_value_t = 0.52)]
+    pub shell_reform_gain: f32,
+
+    #[arg(long, default_value_t = 0.36)]
+    pub void_geometry_gain: f32,
+
+    #[arg(long, default_value_t = 1.15)]
+    pub void_shell_band_scale: f32,
+
+    #[arg(long, default_value_t = 16.0)]
+    pub cell_size: f32,
+
+    #[arg(long, default_value_t = 0.08)]
+    pub dt: f32,
+
+    #[arg(long, default_value_t = 2)]
+    pub substeps_per_frame: usize,
+
+    #[arg(long, default_value_t = 0)]
+    pub headless_steps: usize,
+
+    #[arg(long, default_value_t = false)]
+    pub show_debug_shells: bool,
+
+    #[arg(long, default_value_t = 2)]
+    pub field_splat_radius: usize,
+
+    #[arg(long, default_value_t = 0.82)]
+    pub shell_gain: f32,
+
+    #[arg(long, default_value_t = 28.0)]
+    pub up_core_radius: f32,
+
+    #[arg(long, default_value_t = 18.0)]
+    pub charm_core_radius: f32,
+
+    #[arg(long, default_value_t = 10.0)]
+    pub top_core_radius: f32,
+
+    #[arg(long, default_value_t = 14.0)]
+    pub up_shell_thickness: f32,
+
+    #[arg(long, default_value_t = 10.0)]
+    pub charm_shell_thickness: f32,
+
+    #[arg(long, default_value_t = 6.0)]
+    pub top_shell_thickness: f32,
+
+    #[arg(long, default_value_t = 0.18)]
+    pub velocity_damping: f32,
+
+    #[arg(long, default_value_t = 0.22)]
+    pub tension_relaxation: f32,
+
+    #[arg(long, default_value_t = 0.55)]
+    pub max_speed: f32,
+
+    #[arg(long, default_value_t = 920.0)]
+    pub camera_distance: f32,
+
+    #[arg(long, default_value_t = 640.0)]
+    pub projection_scale: f32,
+
+    #[arg(long, default_value_t = 0.0035)]
+    pub camera_yaw_speed: f32,
+
+    #[arg(long, default_value_t = 0.42)]
+    pub camera_pitch: f32,
+
+    #[arg(long, default_value_t = 2)]
+    pub far_field_stride_3d: usize,
+
+    #[arg(long, default_value_t = 0.45)]
+    pub far_field_fade_cutoff: f32,
+}
+
+impl Config {
+    pub fn apply_runtime_defaults(&mut self) {
+        if self.mode == SimulationMode::ThreeD {
+            if self.particle_count_3d == 120000 {
+                self.particle_count_3d = 140000;
+            }
+            if (self.interaction_radius - 16.0).abs() < f32::EPSILON {
+                self.interaction_radius = 12.0;
+            }
+            if (self.camera_yaw_speed - 0.0035).abs() < f32::EPSILON {
+                self.camera_yaw_speed = 0.004;
+            }
+        }
+    }
+
+    pub fn world_size(&self) -> (f32, f32) {
+        (self.width as f32, self.height as f32)
+    }
+
+    pub fn world_size_3d(&self) -> (f32, f32, f32) {
+        (self.width as f32, self.height as f32, self.depth)
+    }
+
+    pub fn active_particle_count(&self) -> usize {
+        match self.mode {
+            SimulationMode::TwoD => self.particle_count,
+            SimulationMode::ThreeD => self.particle_count_3d,
+        }
+    }
+}

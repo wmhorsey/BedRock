@@ -1,0 +1,4 @@
+[alias]
+sim = "run --release"
+sim2d = "run --release -- --mode 2d"
+headless3d = "run --release -- --mode 3d --headless-steps 100"

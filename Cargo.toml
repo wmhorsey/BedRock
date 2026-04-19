@@ -1,0 +1,16 @@
+[package]
+name = "bedrock"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+default = []
+gpu = ["dep:wgpu"]
+
+[dependencies]
+clap = { version = "4.5.37", features = ["derive"] }
+minifb = "0.27.0"
+nalgebra = "0.33.2"
+rand = "0.8.5"
+rayon = "1.10.0"
+wgpu = { version = "24.0.1", optional = true }

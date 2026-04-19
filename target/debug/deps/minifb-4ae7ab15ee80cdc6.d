@@ -1,0 +1,12 @@
+C:\Users\wmhor\dev\BedRock\target\debug\deps\minifb-4ae7ab15ee80cdc6.d: C:\Users\wmhor\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\minifb-0.27.0\src\lib.rs C:\Users\wmhor\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\minifb-0.27.0\src\error.rs C:\Users\wmhor\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\minifb-0.27.0\src\icon.rs C:\Users\wmhor\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\minifb-0.27.0\src\key.rs C:\Users\wmhor\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\minifb-0.27.0\src\key_handler.rs C:\Users\wmhor\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\minifb-0.27.0\src\os\mod.rs C:\Users\wmhor\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\minifb-0.27.0\src\os\windows\mod.rs C:\Users\wmhor\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\minifb-0.27.0\src\rate.rs
+
+C:\Users\wmhor\dev\BedRock\target\debug\deps\libminifb-4ae7ab15ee80cdc6.rmeta: C:\Users\wmhor\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\minifb-0.27.0\src\lib.rs C:\Users\wmhor\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\minifb-0.27.0\src\error.rs C:\Users\wmhor\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\minifb-0.27.0\src\icon.rs C:\Users\wmhor\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\minifb-0.27.0\src\key.rs C:\Users\wmhor\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\minifb-0.27.0\src\key_handler.rs C:\Users\wmhor\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\minifb-0.27.0\src\os\mod.rs C:\Users\wmhor\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\minifb-0.27.0\src\os\windows\mod.rs C:\Users\wmhor\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\minifb-0.27.0\src\rate.rs
+
+C:\Users\wmhor\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\minifb-0.27.0\src\lib.rs:
+C:\Users\wmhor\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\minifb-0.27.0\src\error.rs:
+C:\Users\wmhor\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\minifb-0.27.0\src\icon.rs:
+C:\Users\wmhor\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\minifb-0.27.0\src\key.rs:
+C:\Users\wmhor\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\minifb-0.27.0\src\key_handler.rs:
+C:\Users\wmhor\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\minifb-0.27.0\src\os\mod.rs:
+C:\Users\wmhor\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\minifb-0.27.0\src\os\windows\mod.rs:
+C:\Users\wmhor\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\minifb-0.27.0\src\rate.rs:
