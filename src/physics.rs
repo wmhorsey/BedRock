@@ -138,7 +138,6 @@ impl Simulation {
         let micro_pop_release = self.config.micro_pop_release;
         let flow_coupling = self.config.flow_coupling;
         let collapse_gain = self.config.collapse_gain;
-        let signal_speed = self.config.signal_speed;
         let shell_source_scale = self.config.shell_source_scale;
         let shell_overlap_gain = self.config.shell_overlap_gain;
         let spike_threshold = self.config.spike_threshold;
@@ -151,7 +150,7 @@ impl Simulation {
         let grid = &self.grid;
         let expected_neighbors = expected_neighbor_count(&self.config).max(1.0);
         let base_spacing = substrate_spacing(&self.config).max(0.5);
-        let causal_horizon = (signal_speed * dt).min(self.config.interaction_radius).max(base_spacing);
+        let causal_horizon = crate::physics::causal_horizon(&self.config);
         let min_shell_gap = base_spacing * 0.35;
 
         self.particles = (0..particles.len())
@@ -597,9 +596,24 @@ fn expected_neighbor_count(config: &Config) -> f32 {
     influence_area / particle_area
 }
 
-fn substrate_spacing(config: &Config) -> f32 {
+pub fn substrate_spacing(config: &Config) -> f32 {
     let (width, height) = config.world_size();
     ((width * height) / config.particle_count as f32).sqrt()
+}
+
+/// Maximum distance a signal may travel in one update step.
+///
+/// This is the discrete causal horizon `ell_causal <= v_eff * dt` from the
+/// simulation spec. It is floored at the substrate spacing so the nearest
+/// neighbors stay reachable, and capped by the interaction radius used for
+/// neighbor search. When `signal_speed * dt` is the binding term the horizon is
+/// physical; when the cap or floor binds instead, the effective speed is set by
+/// numerics rather than by `signal_speed`.
+pub fn causal_horizon(config: &Config) -> f32 {
+    let base_spacing = substrate_spacing(config).max(0.5);
+    (config.signal_speed * config.dt)
+        .min(config.interaction_radius)
+        .max(base_spacing)
 }
 
 fn confine_to_domain(particle: &mut Particle, (width, height): (f32, f32)) {

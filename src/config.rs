@@ -157,6 +157,30 @@ pub struct Config {
 
     #[arg(long, default_value_t = 0.45)]
     pub far_field_fade_cutoff: f32,
+
+    /// Run the causal-front cone test instead of the normal simulation.
+    #[arg(long, default_value_t = false)]
+    pub cone_test: bool,
+
+    /// Number of update steps to evolve the cone pulse.
+    #[arg(long, default_value_t = 80)]
+    pub cone_steps: usize,
+
+    /// Radius of the localized tension pulse injected at the domain center.
+    #[arg(long, default_value_t = 12.0)]
+    pub cone_perturb_radius: f32,
+
+    /// Peak tension added above ambient at the center of the pulse.
+    #[arg(long, default_value_t = 1.5)]
+    pub cone_perturb_amplitude: f32,
+
+    /// Angular bins used to measure front radius and isotropy.
+    #[arg(long, default_value_t = 24)]
+    pub cone_bins: usize,
+
+    /// CSV path for the per-step cone measurement (empty disables the file).
+    #[arg(long, default_value = "cone_test.csv")]
+    pub cone_csv: String,
 }
 
 impl Config {
@@ -171,6 +195,27 @@ impl Config {
             if (self.camera_yaw_speed - 0.0035).abs() < f32::EPSILON {
                 self.camera_yaw_speed = 0.004;
             }
+        }
+    }
+
+    /// Cone-friendly setup: force the 2D reference model and, only where the
+    /// user left global defaults, pick a roomy square domain and a `signal_speed`
+    /// that keeps `signal_speed * dt` strictly between the substrate spacing and
+    /// the interaction radius, so the causal horizon is physical rather than
+    /// clamped by the neighbor cutoff or floored by the lattice spacing.
+    pub fn apply_cone_defaults(&mut self) {
+        self.mode = SimulationMode::TwoD;
+        if self.width == 960 {
+            self.width = 1400;
+        }
+        if self.height == 720 {
+            self.height = 1400;
+        }
+        if self.particle_count == 48000 {
+            self.particle_count = 120000;
+        }
+        if (self.signal_speed - 220.0).abs() < f32::EPSILON {
+            self.signal_speed = 110.0;
         }
     }
 

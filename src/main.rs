@@ -1,5 +1,6 @@
 mod breach_detection;
 mod config;
+mod cone_test;
 mod gpu;
 mod neighbor_search;
 mod neighbor_search_3d;
@@ -18,6 +19,14 @@ use visualization3d::Renderer3d;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut config = Config::parse();
+
+    if config.cone_test {
+        config.apply_cone_defaults();
+        println!("BedRock cone test (causal-front falsification).");
+        println!("GPU path: {}", gpu::acceleration_notes());
+        return cone_test::run(config);
+    }
+
     config.apply_runtime_defaults();
 
     println!("BedRock prototype initialized.");

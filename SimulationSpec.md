@@ -203,11 +203,71 @@ These laws describe the working simulation closure, not the ontology itself.
 
 	If a structure's core ceases to behave like a depression relative to its local exterior and instead becomes equal to or greater than the surrounding field level, it should be treated as entering spike-like behavior. In that regime, the structure should pull substrate inward and shed new depressions or low-tension releases from its surface back into the field.
 
+## 9. Diagnostics and Falsification Tests
+
+Falsification tests must produce quantitative, inspectable numbers, not just
+plausible-looking motion. Each test states a hypothesis derived from the
+ontology, a controlled setup, the observables, and explicit pass/fail criteria.
+
+### 9.1 Cone Test (causal front)
+
+**Hypothesis.** Axiom 10 and the causal propagation rule in section 3 assert a
+finite propagation speed enforced by a per-step causal horizon
+$\ell_{\text{causal}} \le v_{\text{eff}}\,\Delta t$. A localized disturbance must
+therefore stay inside a causal cone whose radius grows at most linearly in time.
+
+**Setup.** Fill the domain with a quiescent uniform substrate (no voids, ambient
+tension, zero velocity). Inject one compactly-supported tension pulse at the
+center. Evolve with the unmodified update loop. Run a **control** copy with
+identical seed and layout but no pulse, and measure every quantity as the
+perturbed-minus-control difference so static lattice noise cancels and only the
+causal signal remains.
+
+**Observables (per step).**
+
+- **Leading edge** $r_{\text{edge}}$: outermost radius with a force difference
+  above a tiny floor. This is the causal front.
+- **Signal front** $r_{\text{sig}}$: outermost radius above a strong-signal
+  threshold. This is the detectable amplitude front and is expected to be
+  diffusion-limited (slower than the causal edge).
+- **Causal bound** $r_{\text{causal}} = r_{\text{pulse}} + n\,\ell_{\text{causal}}$.
+- **Isotropy** via the coefficient of variation of the per-angle leading edge.
+
+**Predictions and pass/fail.**
+
+- *Causality (sharp falsification).* $r_{\text{edge}}(n) \le r_{\text{causal}}(n)$
+  for all $n$, within one lattice spacing. Any response beyond the cone falsifies
+  the causal-horizon closure.
+- *Isotropy.* Leading-edge coefficient of variation should be small (target
+  $< 0.15$); a square or diamond front indicates a grid/lattice artifact.
+- *Emergent speed.* The fitted cone-edge speed is an emergent invariant. The
+  ratio $v_{\text{edge}}/\ell_{\text{causal}}$ near $1$ means the substrate
+  transmits signals near its causal limit (wave-like); a ratio near $0$ means the
+  closure is diffusion-dominated and does not carry signals at the declared
+  speed. The current closure is strongly diffusive (ratio $\ll 1$); raising it
+  toward $O(1)$ is an open target that requires an inertial or restoring term
+  rather than a purely relaxational tension update.
+
+**Knob-robustness protocol (this is what makes it physics).** Sweep the cosmetic
+gains (`attraction_strength`, `shell_overlap_gain`, `spike_threshold`,
+`merge_influence_gain`, ...) and confirm the causality verdict and the cone-edge
+speed are invariant. A causal speed set by the physical `signal_speed` and
+insensitive to the cosmetic knobs is a law; one that drifts with every gain is
+just a tuning artifact.
+
+**Numerical caveat.** The horizon is `min(signal_speed*dt, interaction_radius)`
+floored at the substrate spacing. If `signal_speed*dt` exceeds
+`interaction_radius`, the causal speed is silently set by the neighbor cutoff,
+not by physics; the harness reports which term binds. Keep
+`spacing < signal_speed*dt < interaction_radius` for a physically meaningful run.
+
+**Runner.** `cargo cone` (or `cargo run --release -- --cone-test`). Per-step data
+is written to CSV for external analysis.
+
 ## Remaining Sections
 
 5. Propagation and compression rules
 6. Shell formation, breach, and reform criteria
 7. Composite structure rules
 8. Numerical safeguards and toggles
-9. Diagnostics and falsification tests
 10. Initial conditions and parameter presets

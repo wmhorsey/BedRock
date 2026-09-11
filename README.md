@@ -51,6 +51,32 @@ Controls:
 
 Headless mode is useful for fast validation and parameter sweeps without opening the renderer.
 
+## Cone Test (Causal-Front Falsification)
+
+The cone test turns the finite-speed claim of the ontology into a measurable, falsifiable experiment. It injects one localized tension pulse into a quiescent uniform substrate, evolves an identical pulse-free control in lockstep, and measures the perturbed-minus-control disturbance front over time.
+
+```powershell
+cargo cone
+# equivalently:
+cargo run --release -- --cone-test
+```
+
+Useful overrides:
+
+```powershell
+cargo run --release -- --cone-test --cone-steps 120 --cone-perturb-amplitude 2.0
+cargo run --release -- --cone-test --signal-speed 140 --interaction-radius 20
+cargo run --release -- --cone-test --cone-csv runs/cone_sweep_a.csv
+```
+
+It prints three verdicts:
+
+- **causal horizon classification** — whether the substrate's speed limit is set by the physical `signal_speed` or is silently clamped by the neighbor cutoff (`interaction_radius`) or the lattice spacing.
+- **causality** — PASS if no disturbance ever appears beyond the causal cone `perturb_radius + step * causal_horizon` (a sharp falsification of the finite-speed closure).
+- **isotropy** — PASS if the cone edge is round (low coefficient of variation) rather than a grid-aligned square.
+
+It also reports the emergent cone-edge speed and the `edge / causal` ratio, and writes per-step data to `cone_test.csv`. To promote the causal speed from a knob to a law, sweep the cosmetic gains and confirm the cone-edge speed and causality verdict stay invariant. See [SimulationSpec.md](SimulationSpec.md) section 9 for the full methodology.
+
 ## First Experiments
 
 1. Run the default setup and watch whether the `top` cavity breaches first while `up` remains more stable.
