@@ -53,29 +53,34 @@ Headless mode is useful for fast validation and parameter sweeps without opening
 
 ## Cone Test (Causal-Front Falsification)
 
-The cone test turns the finite-speed claim of the ontology into a measurable, falsifiable experiment. It injects one localized tension pulse into a quiescent uniform substrate, evolves an identical pulse-free control in lockstep, and measures the perturbed-minus-control disturbance front over time.
+The cone test turns the finite-speed claim of the ontology into a measurable experiment: inject one localized tension pulse into a quiescent substrate and measure the disturbance front over time. Two constitutive laws can be tested with `--cone-model`:
+
+- `wave` (default): the conservative acoustic closure `dA/dt = -c*div(G)`, `dG/dt = -c*grad(A)`. Energy-conserving, real propagating wave; `signal_speed` is the wave speed `c`.
+- `relax`: the current relaxational particle engine (diffusive; kept as a comparison baseline).
 
 ```powershell
 cargo cone
 # equivalently:
 cargo run --release -- --cone-test
+# compare against the relaxational engine:
+cargo run --release -- --cone-test --cone-model relax
 ```
 
 Useful overrides:
 
 ```powershell
-cargo run --release -- --cone-test --cone-steps 120 --cone-perturb-amplitude 2.0
-cargo run --release -- --cone-test --signal-speed 140 --interaction-radius 20
-cargo run --release -- --cone-test --cone-csv runs/cone_sweep_a.csv
+cargo run --release -- --cone-test --cone-steps 300 --cone-perturb-amplitude 2.0
+cargo run --release -- --cone-test --signal-speed 18 --cone-csv runs/wave_a.csv
 ```
 
-It prints three verdicts:
+Wave verdicts:
 
-- **causal horizon classification** — whether the substrate's speed limit is set by the physical `signal_speed` or is silently clamped by the neighbor cutoff (`interaction_radius`) or the lattice spacing.
-- **causality** — PASS if no disturbance ever appears beyond the causal cone `perturb_radius + step * causal_horizon` (a sharp falsification of the finite-speed closure).
-- **isotropy** — PASS if the cone edge is round (low coefficient of variation) rather than a grid-aligned square.
+- **wave speed (|A|)** vs **c** — the amplitude front should radiate at ~`c`, so `signal_speed` is a real speed, not just the neighbor-list reach.
+- **finite propagation** — PASS if nothing outruns the operator stencil. A faint dispersive precursor ahead of the front is an expected lattice artifact.
+- **isotropy** — PASS if the wavefront is round.
+- **energy** — bounded (no damping) confirms the medium is conservative rather than dissipative.
 
-It also reports the emergent cone-edge speed and the `edge / causal` ratio, and writes per-step data to `cone_test.csv`. To promote the causal speed from a knob to a law, sweep the cosmetic gains and confirm the cone-edge speed and causality verdict stay invariant. See [SimulationSpec.md](SimulationSpec.md) section 9 for the full methodology.
+Relax verdicts (diffusive baseline): causal-horizon classification, causality, isotropy, and the `edge/causal` ratio (~0.02, showing the front barely moves). Per-step data is written to `cone_test.csv`. See [SimulationSpec.md](SimulationSpec.md) section 9 for the full methodology.
 
 ## First Experiments
 

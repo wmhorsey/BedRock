@@ -264,6 +264,47 @@ not by physics; the harness reports which term binds. Keep
 **Runner.** `cargo cone` (or `cargo run --release -- --cone-test`). Per-step data
 is written to CSV for external analysis.
 
+### 9.2 Constitutive law: conservative wave vs relaxational fluid
+
+The 9.1 cone test showed the default relaxational closure does not propagate a
+signal: the field front decays in place (edge/causal ~ 0.02), so `signal_speed`
+acts only as the neighbor-list reach. A real signal needs a conservative
+restoring response, not first-order relaxation plus velocity damping.
+
+The `--cone-model wave` closure supplies one, using quantities the ontology
+already names. With $A$ the field and $\mathbf{G} = \nabla A$ (Axiom 2):
+
+$$
+\partial_t A = -c\,\nabla\!\cdot\mathbf{G}, \qquad \partial_t \mathbf{G} = -c\,\nabla A
+\quad\Rightarrow\quad \partial_t^2 A = c^2 \nabla^2 A.
+$$
+
+This is a wave at speed $c$ that conserves $E = \tfrac12\sum(A^2 + |\mathbf{G}|^2)$
+(Axiom 0: no drag, no resistance) and needs no particle inertia. The mesh-free
+discretization uses symmetric pair weights so the discrete divergence is the
+exact negative transpose of the gradient, making the semi-discrete system
+Hamiltonian; a symplectic leapfrog then has no systematic energy drift.
+
+**Acceptance criteria (wave).**
+
+- The $|A|$ amplitude front radiates at $\sim c$ (so `signal_speed` is a real
+  speed, not a neighbor cutoff).
+- Total energy stays bounded (no damping) — the direct refutation of the
+  relaxational decay.
+- The wavefront is isotropic.
+- Finite propagation holds: nothing outruns the operator stencil.
+
+**Caveats and open items.**
+
+- The discrete scheme carries a faint dispersive precursor ahead of the physical
+  front — a lattice artifact bounded by the stencil reach, not true acausality.
+  Tightening it needs a smaller stencil or a dispersion-controlled operator.
+- The wave closure currently governs the field only. Coupling it back to the
+  particle-motion engine and to true voids is future work.
+- With a real wave in hand, a local compression factor $C(\mathbf{x})$ (Axiom 10)
+  becomes testable: it should slow the wave near high-tension cores, an emergent
+  time-dilation / lensing analog.
+
 ## Remaining Sections
 
 5. Propagation and compression rules

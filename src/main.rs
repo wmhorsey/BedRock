@@ -1,6 +1,7 @@
 mod breach_detection;
 mod config;
 mod cone_test;
+mod field_wave;
 mod gpu;
 mod neighbor_search;
 mod neighbor_search_3d;

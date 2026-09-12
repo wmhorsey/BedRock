@@ -8,6 +8,14 @@ pub enum SimulationMode {
     ThreeD,
 }
 
+#[derive(Debug, Clone, Copy, ValueEnum, PartialEq, Eq)]
+pub enum ConeModel {
+    /// Current relaxational particle engine (diffusive; no wave).
+    Relax,
+    /// Conservative acoustic field closure (real propagating wave).
+    Wave,
+}
+
 #[derive(Parser, Debug, Clone)]
 #[command(author, version, about = "BedRock single-substance tension-field prototype")]
 pub struct Config {
@@ -162,6 +170,10 @@ pub struct Config {
     #[arg(long, default_value_t = false)]
     pub cone_test: bool,
 
+    /// Constitutive law used by the cone test.
+    #[arg(long, value_enum, default_value_t = ConeModel::Wave)]
+    pub cone_model: ConeModel,
+
     /// Number of update steps to evolve the cone pulse.
     #[arg(long, default_value_t = 80)]
     pub cone_steps: usize,
@@ -199,23 +211,57 @@ impl Config {
     }
 
     /// Cone-friendly setup: force the 2D reference model and, only where the
-    /// user left global defaults, pick a roomy square domain and a `signal_speed`
-    /// that keeps `signal_speed * dt` strictly between the substrate spacing and
-    /// the interaction radius, so the causal horizon is physical rather than
-    /// clamped by the neighbor cutoff or floored by the lattice spacing.
+    /// user left global defaults, pick a domain and parameters that make the
+    /// selected cone model measurable out of the box.
     pub fn apply_cone_defaults(&mut self) {
         self.mode = SimulationMode::TwoD;
-        if self.width == 960 {
-            self.width = 1400;
-        }
-        if self.height == 720 {
-            self.height = 1400;
-        }
-        if self.particle_count == 48000 {
-            self.particle_count = 120000;
-        }
-        if (self.signal_speed - 220.0).abs() < f32::EPSILON {
-            self.signal_speed = 110.0;
+        match self.cone_model {
+            // Relaxational engine: keep signal_speed * dt between the substrate
+            // spacing and the interaction radius so the causal horizon is
+            // physical rather than clamped by the neighbor cutoff.
+            ConeModel::Relax => {
+                if self.width == 960 {
+                    self.width = 1400;
+                }
+                if self.height == 720 {
+                    self.height = 1400;
+                }
+                if self.particle_count == 48000 {
+                    self.particle_count = 120000;
+                }
+                if (self.signal_speed - 220.0).abs() < f32::EPSILON {
+                    self.signal_speed = 110.0;
+                }
+            }
+            // Conservative wave: signal_speed is now the wave speed c. Pick a
+            // sample spacing and support so the leapfrog sits near CFL ~0.3
+            // (c*dt ~ 0.3 * spacing) with a well-resolved kernel (~4 spacings).
+            ConeModel::Wave => {
+                if self.width == 960 {
+                    self.width = 1200;
+                }
+                if self.height == 720 {
+                    self.height = 1200;
+                }
+                if self.particle_count == 48000 {
+                    self.particle_count = 40000;
+                }
+                if (self.interaction_radius - 16.0).abs() < f32::EPSILON {
+                    self.interaction_radius = 24.0;
+                }
+                if (self.cell_size - 16.0).abs() < f32::EPSILON {
+                    self.cell_size = 24.0;
+                }
+                if (self.signal_speed - 220.0).abs() < f32::EPSILON {
+                    self.signal_speed = 22.5;
+                }
+                if self.cone_steps == 80 {
+                    self.cone_steps = 300;
+                }
+                if (self.cone_perturb_radius - 12.0).abs() < f32::EPSILON {
+                    self.cone_perturb_radius = 18.0;
+                }
+            }
         }
     }
 

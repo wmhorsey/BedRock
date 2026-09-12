@@ -26,7 +26,8 @@ use std::io::{BufWriter, Write};
 
 use nalgebra::Vector2;
 
-use crate::config::Config;
+use crate::config::{Config, ConeModel};
+use crate::field_wave::WaveField;
 use crate::physics::{self, ParticleKind, Simulation};
 
 /// One measured time slice of the propagating front (perturbed minus control).
@@ -48,6 +49,8 @@ struct Sample {
     /// Coefficient of variation of the per-bin leading edge (0 == round cone).
     isotropy_cv: f32,
     disturbed: usize,
+    /// Conserved wave energy (wave model only; 0 for the relaxational model).
+    energy: f32,
 }
 
 struct ConeResult {
@@ -58,10 +61,19 @@ struct ConeResult {
     worst_overshoot: f32,
     /// Last step whose leading edge stayed clear of the boundary buffer.
     last_clean_step: usize,
+    /// Leapfrog CFL number `c*dt/spacing` (wave model only).
+    cfl: f32,
+    /// Peak relative energy drift over the run (wave model only).
+    energy_drift: f32,
+    /// Signed final relative energy drift (wave model only).
+    energy_final_drift: f32,
 }
 
 pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
-    let result = measure(&config);
+    let result = match config.cone_model {
+        ConeModel::Relax => measure(&config),
+        ConeModel::Wave => measure_wave(&config),
+    };
     write_csv(&config.cone_csv, &result.samples)?;
     report(&config, &result);
     Ok(())
@@ -166,6 +178,7 @@ fn measure(config: &Config) -> ConeResult {
             causal_radius,
             isotropy_cv,
             disturbed,
+            energy: 0.0,
         });
 
         if leading_edge < stop_radius {
@@ -187,6 +200,141 @@ fn measure(config: &Config) -> ConeResult {
         spacing,
         worst_overshoot,
         last_clean_step,
+        cfl: 0.0,
+        energy_drift: 0.0,
+        energy_final_drift: 0.0,
+    }
+}
+
+/// Conservative-wave cone measurement.
+///
+/// Evolves the `(A, G)` acoustic field over fixed samples. The rest state is
+/// exactly `A = 0, G = 0`, so no control run is needed — every nonzero reading
+/// is the pulse. The wave should radiate at `c = signal_speed` with energy
+/// conserved.
+fn measure_wave(config: &Config) -> ConeResult {
+    let (w, h) = config.world_size();
+    let center = Vector2::new(w * 0.5, h * 0.5);
+    let perturb_radius = config.cone_perturb_radius.max(1.0);
+    let amplitude = config.cone_perturb_amplitude;
+    let bins = config.cone_bins.max(1);
+    let dt = config.dt;
+    let c = config.signal_speed;
+    let spacing = physics::substrate_spacing(config).max(0.5);
+    let support = config.interaction_radius;
+    let step_advance = c * dt;
+
+    // Reuse the existing seeding for a uniform jittered sample layout.
+    let sim = Simulation::new(config.clone());
+    let positions: Vec<Vector2<f32>> = sim.particles.iter().map(|p| p.position).collect();
+    let mut wave = WaveField::new(positions, c, dt, spacing, support);
+    wave.inject_pulse(center, perturb_radius, amplitude);
+    let energy0 = wave.energy();
+
+    let nearest_boundary = center.x.min(w - center.x).min(center.y).min(h - center.y);
+    let stop_radius = 0.85 * nearest_boundary;
+
+    let field_threshold = (0.01 * amplitude).max(1.0e-4);
+    let strong_threshold = (0.05 * amplitude).max(1.0e-4);
+    let mut flux_floor = 0.0f32;
+
+    let mut samples: Vec<Sample> = Vec::with_capacity(config.cone_steps);
+    let mut bin_edge = vec![0.0f32; bins];
+    let mut bin_signal = vec![0.0f32; bins];
+    let mut worst_overshoot = f32::MIN;
+    let mut last_clean_step = 0usize;
+    let mut energy_drift = 0.0f32;
+    let mut energy_final = 0.0f32;
+
+    for step in 1..=config.cone_steps {
+        wave.step();
+
+        if step == 1 {
+            let mut peak = 0.0f32;
+            for i in 0..wave.len() {
+                peak = peak.max(wave.flux_magnitude(i));
+            }
+            flux_floor = (1.0e-4 * peak).max(1.0e-9);
+        }
+
+        for slot in bin_edge.iter_mut() {
+            *slot = 0.0;
+        }
+        for slot in bin_signal.iter_mut() {
+            *slot = 0.0;
+        }
+        let mut tension_front = 0.0f32;
+        let mut disturbed = 0usize;
+
+        for i in 0..wave.len() {
+            let offset = wave.position(i) - center;
+            let radius = offset.norm();
+            let amp = wave.field(i).abs();
+            let flux = wave.flux_magnitude(i);
+            let angle = offset.y.atan2(offset.x).rem_euclid(TAU);
+            let bin = ((angle / TAU) * bins as f32) as usize % bins;
+
+            if amp > field_threshold {
+                tension_front = tension_front.max(radius);
+            }
+            if flux > flux_floor {
+                bin_edge[bin] = bin_edge[bin].max(radius);
+            }
+            if amp > strong_threshold {
+                disturbed += 1;
+                bin_signal[bin] = bin_signal[bin].max(radius);
+            }
+        }
+
+        let signal_front_max = bin_signal.iter().copied().fold(0.0f32, f32::max);
+        let signal_front_median = median(&bin_signal);
+        let leading_edge = bin_edge.iter().copied().fold(0.0f32, f32::max);
+        let isotropy_cv = coefficient_of_variation(&bin_edge);
+        let causal_radius = perturb_radius + step as f32 * step_advance;
+        // Finite-propagation bound is the operator's stencil reach per step, not
+        // c*dt: the discrete wave carries faint dispersive precursors ahead of
+        // the physical front, but nothing can outrun the neighbor coupling.
+        let info_radius = perturb_radius + step as f32 * support;
+        worst_overshoot = worst_overshoot.max(leading_edge - (info_radius + spacing));
+
+        let energy = wave.energy();
+        let signed = ((energy - energy0) / energy0.max(1.0e-12)) as f32;
+        energy_final = signed;
+        energy_drift = energy_drift.max(signed.abs());
+
+        samples.push(Sample {
+            step,
+            time: step as f32 * dt,
+            signal_front_max,
+            signal_front_median,
+            tension_front,
+            leading_edge,
+            causal_radius,
+            isotropy_cv,
+            disturbed,
+            energy: energy as f32,
+        });
+
+        if leading_edge < stop_radius {
+            last_clean_step = step;
+        } else {
+            break;
+        }
+    }
+
+    if last_clean_step == 0 {
+        last_clean_step = samples.len();
+    }
+
+    ConeResult {
+        samples,
+        horizon: step_advance,
+        spacing,
+        worst_overshoot,
+        last_clean_step,
+        cfl: wave.cfl(),
+        energy_drift,
+        energy_final_drift: energy_final,
     }
 }
 
@@ -244,12 +392,12 @@ fn write_csv(path: &str, samples: &[Sample]) -> Result<(), Box<dyn Error>> {
     let mut writer = BufWriter::new(file);
     writeln!(
         writer,
-        "step,time,leading_edge,causal_radius,signal_front_max,signal_front_median,tension_front,isotropy_cv,disturbed"
+        "step,time,leading_edge,causal_radius,signal_front_max,signal_front_median,tension_front,isotropy_cv,disturbed,energy"
     )?;
     for s in samples {
         writeln!(
             writer,
-            "{},{:.5},{:.4},{:.4},{:.4},{:.4},{:.4},{:.5},{}",
+            "{},{:.5},{:.4},{:.4},{:.4},{:.4},{:.4},{:.5},{},{:.4}",
             s.step,
             s.time,
             s.leading_edge,
@@ -259,6 +407,7 @@ fn write_csv(path: &str, samples: &[Sample]) -> Result<(), Box<dyn Error>> {
             s.tension_front,
             s.isotropy_cv,
             s.disturbed,
+            s.energy,
         )?;
     }
     Ok(())
@@ -270,16 +419,6 @@ fn report(config: &Config, result: &ConeResult) {
     let spacing = result.spacing;
     let (w, h) = config.world_size();
 
-    let phys = config.signal_speed * dt;
-    let inner = phys.min(config.interaction_radius);
-    let classification = if spacing >= inner {
-        "spacing-limited: floored by substrate spacing (raise particle_count or signal_speed*dt)"
-    } else if phys <= config.interaction_radius {
-        "physical: set by signal_speed * dt"
-    } else {
-        "NUMERICS-LIMITED: clamped by interaction_radius (raise interaction_radius or lower signal_speed*dt)"
-    };
-
     // Linear-fit the fronts over the clean window, skipping the source-size
     // startup transient.
     let warmup = 4usize;
@@ -290,8 +429,10 @@ fn report(config: &Config, result: &ConeResult) {
         .collect();
     let slope_edge = fit_slope(&clean, warmup, |s| s.leading_edge);
     let slope_signal = fit_slope(&clean, warmup, |s| s.signal_front_max);
-
+    let slope_field = fit_slope(&clean, warmup, |s| s.tension_front);
     let final_cv = clean.last().map(|s| s.isotropy_cv).unwrap_or(0.0);
+    let first_tension = clean.first().map(|s| s.tension_front).unwrap_or(0.0);
+    let last_tension = clean.last().map(|s| s.tension_front).unwrap_or(0.0);
 
     let causality = if result.worst_overshoot <= 0.0 {
         "PASS"
@@ -309,20 +450,54 @@ fn report(config: &Config, result: &ConeResult) {
     };
 
     println!();
-    println!("=== BedRock Cone Test (causal-front falsification) ===");
+    match config.cone_model {
+        ConeModel::Relax => println!("=== BedRock Cone Test — relaxational engine ==="),
+        ConeModel::Wave => println!("=== BedRock Cone Test — conservative wave ==="),
+    }
     println!("domain            : {:.0} x {:.0}", w, h);
     println!("particles         : {}", config.particle_count);
     println!("substrate spacing : {:.3}", spacing);
     println!("dt                : {:.4}", dt);
-    println!(
-        "signal_speed      : {:.2}  (signal_speed*dt = {:.3})",
-        config.signal_speed, phys
-    );
-    println!("interaction_radius: {:.2}", config.interaction_radius);
-    println!(
-        "causal horizon    : {:.3} units/step  [{}]",
-        horizon, classification
-    );
+
+    match config.cone_model {
+        ConeModel::Relax => {
+            let phys = config.signal_speed * dt;
+            let inner = phys.min(config.interaction_radius);
+            let classification = if spacing >= inner {
+                "spacing-limited: floored by substrate spacing"
+            } else if phys <= config.interaction_radius {
+                "physical: set by signal_speed * dt"
+            } else {
+                "NUMERICS-LIMITED: clamped by interaction_radius"
+            };
+            println!(
+                "signal_speed      : {:.2}  (signal_speed*dt = {:.3})",
+                config.signal_speed, phys
+            );
+            println!("interaction_radius: {:.2}", config.interaction_radius);
+            println!("causal horizon    : {:.3} units/step  [{}]", horizon, classification);
+        }
+        ConeModel::Wave => {
+            let cfl_note = if result.cfl <= 0.4 {
+                "stable"
+            } else if result.cfl <= 0.7 {
+                "near limit"
+            } else {
+                "UNSTABLE-RISK: lower signal_speed or dt"
+            };
+            println!(
+                "wave speed c      : {:.2}  (c*dt = {:.3} units/step)",
+                config.signal_speed, horizon
+            );
+            println!(
+                "kernel support    : {:.2}  (~{:.1} spacings)",
+                config.interaction_radius,
+                config.interaction_radius / spacing.max(1.0e-6)
+            );
+            println!("CFL number        : {:.3}  [{}]", result.cfl, cfl_note);
+        }
+    }
+
     println!(
         "pulse             : radius {:.2}, amplitude {:.2} over ambient {:.2}",
         config.cone_perturb_radius, config.cone_perturb_amplitude, config.ambient_tension
@@ -333,43 +508,103 @@ fn report(config: &Config, result: &ConeResult) {
         result.last_clean_step
     );
     println!("-----------------------------------------------------");
-    println!(
-        "cone edge speed    : {:.3} units/step = {:.2} units/time",
-        slope_edge,
-        slope_edge / dt
-    );
-    println!(
-        "signal front speed : {:.3} units/step = {:.2} units/time",
-        slope_signal,
-        slope_signal / dt
-    );
-    println!(
-        "causal limit       : {:.3} units/step = {:.2} units/time",
-        horizon,
-        horizon / dt
-    );
-    if horizon > 0.0 {
-        println!("edge / causal ratio: {:.2}", slope_edge / horizon);
+
+    match config.cone_model {
+        ConeModel::Relax => {
+            println!(
+                "cone edge speed    : {:.3} units/step = {:.2} units/time",
+                slope_edge,
+                slope_edge / dt
+            );
+            println!(
+                "signal front speed : {:.3} units/step = {:.2} units/time",
+                slope_signal,
+                slope_signal / dt
+            );
+            println!(
+                "causal limit       : {:.3} units/step = {:.2} units/time",
+                horizon,
+                horizon / dt
+            );
+            if horizon > 0.0 {
+                println!("edge / causal ratio: {:.2}", slope_edge / horizon);
+            }
+        }
+        ConeModel::Wave => {
+            println!(
+                "wave speed (|A|)   : {:.3} units/step = {:.2} units/time",
+                slope_field,
+                slope_field / dt
+            );
+            println!(
+                "precursor edge     : {:.3} units/step = {:.2} units/time  (dispersive)",
+                slope_edge,
+                slope_edge / dt
+            );
+            println!(
+                "target speed c     : {:.3} units/step = {:.2} units/time",
+                horizon,
+                horizon / dt
+            );
+            if horizon > 0.0 {
+                println!("wave / c ratio     : {:.2}", slope_field / horizon);
+            }
+        }
     }
+
     println!("-----------------------------------------------------");
-    println!(
-        "causality (no superluminal leakage): {}  (worst overshoot {:.3} units beyond causal+spacing)",
-        causality, result.worst_overshoot
-    );
+    match config.cone_model {
+        ConeModel::Relax => println!(
+            "causality (no superluminal leakage): {}  (worst overshoot {:.3})",
+            causality, result.worst_overshoot
+        ),
+        ConeModel::Wave => println!(
+            "finite propagation (within stencil): {}  (worst overshoot {:.3})",
+            causality, result.worst_overshoot
+        ),
+    }
     println!(
         "isotropy  (cone CV at step {})      : {:.3}  {}",
         result.last_clean_step, final_cv, isotropy
     );
-    if !config.cone_csv.is_empty() {
-        println!("per-step CSV written to            : {}", config.cone_csv);
+
+    if config.cone_model == ConeModel::Wave {
+        let radiates = last_tension > first_tension + spacing;
+        let energy_ok = result.energy_drift < 0.10;
+        println!(
+            "field front (|A|)  : {:.2} -> {:.2}  [{}]",
+            first_tension,
+            last_tension,
+            if radiates { "RADIATES" } else { "does not spread" }
+        );
+        println!(
+            "energy: peak drift {:.2}%, final {:+.2}%  [{}]",
+            result.energy_drift * 100.0,
+            result.energy_final_drift * 100.0,
+            if energy_ok { "BOUNDED (no damping)" } else { "check CFL" }
+        );
     }
+
     println!("-----------------------------------------------------");
     println!("Interpretation:");
-    println!("  The causal limit is fixed by signal_speed, a physical parameter.");
-    println!("  To promote this from a knob to a law, sweep the cosmetic gains");
-    println!("  (attraction_strength, shell_overlap_gain, spike_threshold, ...)");
-    println!("  and confirm the cone edge speed and the causality verdict stay");
-    println!("  invariant.");
+    match config.cone_model {
+        ConeModel::Relax => {
+            println!("  Relaxational closure: the front barely advances and the field");
+            println!("  amplitude decays in place. signal_speed is the neighbor-list");
+            println!("  reach, not a propagation speed. Use --cone-model wave for the");
+            println!("  conservative wave closure.");
+        }
+        ConeModel::Wave => {
+            println!("  Conservative wave: the |A| front radiates at ~c with energy");
+            println!("  bounded (no damping), so signal_speed is now a real speed. A");
+            println!("  faint dispersive precursor runs ahead (lattice artifact, bounded");
+            println!("  by the stencil). Next phase: a local C(x) to slow the wave.");
+        }
+    }
+    if !config.cone_csv.is_empty() {
+        println!("-----------------------------------------------------");
+        println!("per-step CSV written to: {}", config.cone_csv);
+    }
 }
 
 fn fit_slope(clean: &[&Sample], warmup: usize, value: impl Fn(&Sample) -> f32) -> f32 {
@@ -435,6 +670,7 @@ mod tests {
     fn cone_config() -> Config {
         let mut config = Config::parse_from(["bedrock"]);
         config.mode = crate::config::SimulationMode::TwoD;
+        config.cone_model = ConeModel::Relax;
         config.width = 400;
         config.height = 400;
         config.particle_count = 8000;
