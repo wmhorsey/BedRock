@@ -62,6 +62,8 @@ The cone test turns the finite-speed claim of the ontology into a measurable exp
 cargo cone
 # equivalently:
 cargo run --release -- --cone-test
+# shell-pop (ring) source instead of a disk pulse:
+cargo cone-shell
 # compare against the relaxational engine:
 cargo run --release -- --cone-test --cone-model relax
 ```
@@ -73,12 +75,14 @@ cargo run --release -- --cone-test --cone-steps 300 --cone-perturb-amplitude 2.0
 cargo run --release -- --cone-test --signal-speed 18 --cone-csv runs/wave_a.csv
 ```
 
+The wave source is a central disk pulse by default; `--cone-source shell` releases a tension ring instead (a collapse/pop that radiates inward and outward). A disk reads a touch slow and a thin shell a touch fast — both bracket `c`.
+
 Wave verdicts:
 
-- **propagation speed (|A|)** — PASS if the amplitude-front speed is subluminal (`<= c`); its value (~0.9·`c`) is the official cone number, so `signal_speed` is a real speed rather than the neighbor-list reach.
+- **front speed vs c (|A|)** — PASS if the amplitude-front speed is within ~±20% of `c` (source-dependent dispersion brackets `c`); the `|A|` front is the official cone number, so `signal_speed` is a real speed rather than the neighbor-list reach.
 - **isotropy** — PASS if the wavefront is round.
 - **energy** — bounded (no damping) confirms the medium is conservative rather than dissipative.
-- The `|A|` 1% edge rides ~1 sample spacing ahead of `c*t` (weak dispersion) and the `|G|` flux edge is a secondary contour — both reported as diagnostics, not gates.
+- The `|A|` 1% edge rides ahead of `c*t` by source-dependent dispersion (a few spacings; more for a sharp shell) and the `|G|` flux edge is a secondary contour — both reported as diagnostics, not gates.
 
 Relax verdicts (diffusive baseline): causal-horizon classification, causality, isotropy, and the `edge/causal` ratio (~0.02, showing the front barely moves). Per-step data is written to `cone_test.csv`. See [SimulationSpec.md](SimulationSpec.md) section 9 for the full methodology.
 

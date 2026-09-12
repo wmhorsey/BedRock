@@ -156,6 +156,27 @@ impl WaveField {
         }
     }
 
+    /// Shell pop: dump a compact cos^2 tension ring at `radius` (half-width
+    /// `width`) with zero flux. A physical collapse source rather than a
+    /// hand-placed disk: the ring radiates inward (focusing) and outward, and the
+    /// outward front is the measured cone.
+    pub fn inject_shell_pop(
+        &mut self,
+        center: Vector2<f32>,
+        radius: f32,
+        width: f32,
+        amplitude: f32,
+    ) {
+        let width = width.max(1.0e-3);
+        for (a, pos) in self.a.iter_mut().zip(&self.positions) {
+            let offset = ((pos - center).norm() - radius).abs();
+            if offset <= width {
+                let phase = 0.5 * std::f32::consts::PI * offset / width;
+                *a = amplitude * phase.cos() * phase.cos();
+            }
+        }
+    }
+
     /// One synchronized velocity-Verlet (kick-drift-kick) step of the
     /// conservative wave. Keeping A and G at the same time level makes the
     /// measured energy oscillation second-order small (a plain symplectic-Euler
@@ -338,5 +359,42 @@ mod tests {
             flux,
             stencil_bound
         );
+    }
+
+    #[test]
+    fn shell_pop_radiates_outward() {
+        let (mut field, spacing, advance) = test_field();
+        let center = Vector2::new(200.0, 200.0);
+        let ring_radius = 60.0;
+        let ring_width = 3.0 * spacing;
+        field.inject_shell_pop(center, ring_radius, ring_width, 1.0);
+        let e0 = field.energy();
+
+        let outer_front = |f: &WaveField| {
+            let mut r = 0.0f32;
+            for i in 0..f.len() {
+                if f.field(i).abs() > 0.02 {
+                    r = r.max((f.position(i) - center).norm());
+                }
+            }
+            r
+        };
+
+        let steps = 30;
+        for _ in 0..steps {
+            field.step();
+        }
+
+        // The outgoing front radiates past the ring at roughly the wave speed.
+        let outer = outer_front(&field);
+        assert!(
+            outer > ring_radius + ring_width + 3.0 * advance,
+            "outgoing front {} did not radiate past ring {}",
+            outer,
+            ring_radius + ring_width
+        );
+        // Energy stays bounded (conservative), same as the disk source.
+        let drift = ((field.energy() - e0) / e0).abs();
+        assert!(drift < 0.05, "shell-pop energy drift {} too large", drift);
     }
 }

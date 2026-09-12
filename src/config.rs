@@ -16,6 +16,14 @@ pub enum ConeModel {
     Wave,
 }
 
+#[derive(Debug, Clone, Copy, ValueEnum, PartialEq, Eq)]
+pub enum ConeSource {
+    /// Compact disk pulse at the domain center.
+    Disk,
+    /// Shell pop: a tension ring released with zero flux (physical collapse).
+    Shell,
+}
+
 #[derive(Parser, Debug, Clone)]
 #[command(author, version, about = "BedRock single-substance tension-field prototype")]
 pub struct Config {
@@ -173,6 +181,18 @@ pub struct Config {
     /// Constitutive law used by the cone test.
     #[arg(long, value_enum, default_value_t = ConeModel::Wave)]
     pub cone_model: ConeModel,
+
+    /// Excitation used by the wave cone test.
+    #[arg(long, value_enum, default_value_t = ConeSource::Disk)]
+    pub cone_source: ConeSource,
+
+    /// Ring radius for the shell-pop source (wave model).
+    #[arg(long, default_value_t = 120.0)]
+    pub cone_shell_radius: f32,
+
+    /// Ring half-width for the shell-pop source (wave model).
+    #[arg(long, default_value_t = 18.0)]
+    pub cone_shell_width: f32,
 
     /// Number of update steps to evolve the cone pulse.
     #[arg(long, default_value_t = 80)]
