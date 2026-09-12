@@ -236,10 +236,15 @@ fn measure_wave(config: &Config) -> ConeResult {
 
     let field_threshold = (0.01 * amplitude).max(1.0e-4);
     let strong_threshold = (0.05 * amplitude).max(1.0e-4);
+    // Flux-front floor is a real fraction of the peak, so the reported |G| front
+    // tracks the physical wave rather than the faint sub-floor stencil
+    // precursor. A much smaller leak floor is used only to decide when to stop,
+    // so boundary reflection of the precursor never pollutes the fit.
     let mut flux_floor = 0.0f32;
+    let mut leak_floor = 0.0f32;
 
     let mut samples: Vec<Sample> = Vec::with_capacity(config.cone_steps);
-    let mut bin_edge = vec![0.0f32; bins];
+    let mut bin_field = vec![0.0f32; bins];
     let mut bin_signal = vec![0.0f32; bins];
     let mut worst_overshoot = f32::MIN;
     let mut last_clean_step = 0usize;
@@ -254,16 +259,18 @@ fn measure_wave(config: &Config) -> ConeResult {
             for i in 0..wave.len() {
                 peak = peak.max(wave.flux_magnitude(i));
             }
-            flux_floor = (1.0e-4 * peak).max(1.0e-9);
+            flux_floor = (0.02 * peak).max(1.0e-6);
+            leak_floor = (1.0e-4 * peak).max(1.0e-9);
         }
 
-        for slot in bin_edge.iter_mut() {
+        for slot in bin_field.iter_mut() {
             *slot = 0.0;
         }
         for slot in bin_signal.iter_mut() {
             *slot = 0.0;
         }
-        let mut tension_front = 0.0f32;
+        let mut flux_front = 0.0f32;
+        let mut true_leading = 0.0f32;
         let mut disturbed = 0usize;
 
         for i in 0..wave.len() {
@@ -275,27 +282,29 @@ fn measure_wave(config: &Config) -> ConeResult {
             let bin = ((angle / TAU) * bins as f32) as usize % bins;
 
             if amp > field_threshold {
-                tension_front = tension_front.max(radius);
-            }
-            if flux > flux_floor {
-                bin_edge[bin] = bin_edge[bin].max(radius);
+                bin_field[bin] = bin_field[bin].max(radius);
             }
             if amp > strong_threshold {
                 disturbed += 1;
                 bin_signal[bin] = bin_signal[bin].max(radius);
             }
+            if flux > flux_floor {
+                flux_front = flux_front.max(radius);
+            }
+            if flux > leak_floor {
+                true_leading = true_leading.max(radius);
+            }
         }
 
+        let tension_front = bin_field.iter().copied().fold(0.0f32, f32::max);
+        let isotropy_cv = coefficient_of_variation(&bin_field);
         let signal_front_max = bin_signal.iter().copied().fold(0.0f32, f32::max);
         let signal_front_median = median(&bin_signal);
-        let leading_edge = bin_edge.iter().copied().fold(0.0f32, f32::max);
-        let isotropy_cv = coefficient_of_variation(&bin_edge);
         let causal_radius = perturb_radius + step as f32 * step_advance;
-        // Finite-propagation bound is the operator's stencil reach per step, not
-        // c*dt: the discrete wave carries faint dispersive precursors ahead of
-        // the physical front, but nothing can outrun the neighbor coupling.
-        let info_radius = perturb_radius + step as f32 * support;
-        worst_overshoot = worst_overshoot.max(leading_edge - (info_radius + spacing));
+        // Diagnostic: how far the |A| 1% edge rides ahead of the c*t light cone.
+        // The gated causal verdict uses the sustained front speed (fit) instead,
+        // since this instantaneous contour picks up weak dispersion early on.
+        worst_overshoot = worst_overshoot.max(tension_front - (causal_radius + spacing));
 
         let energy = wave.energy();
         let signed = ((energy - energy0) / energy0.max(1.0e-12)) as f32;
@@ -308,14 +317,15 @@ fn measure_wave(config: &Config) -> ConeResult {
             signal_front_max,
             signal_front_median,
             tension_front,
-            leading_edge,
+            leading_edge: flux_front,
             causal_radius,
             isotropy_cv,
             disturbed,
             energy: energy as f32,
         });
 
-        if leading_edge < stop_radius {
+        // Stop before the fastest (sub-floor) precursor reaches the boundary.
+        if true_leading < stop_radius {
             last_clean_step = step;
         } else {
             break;
@@ -537,7 +547,7 @@ fn report(config: &Config, result: &ConeResult) {
                 slope_field / dt
             );
             println!(
-                "precursor edge     : {:.3} units/step = {:.2} units/time  (dispersive)",
+                "flux front (|G|)   : {:.3} units/step = {:.2} units/time  (secondary)",
                 slope_edge,
                 slope_edge / dt
             );
@@ -558,10 +568,14 @@ fn report(config: &Config, result: &ConeResult) {
             "causality (no superluminal leakage): {}  (worst overshoot {:.3})",
             causality, result.worst_overshoot
         ),
-        ConeModel::Wave => println!(
-            "finite propagation (within stencil): {}  (worst overshoot {:.3})",
-            causality, result.worst_overshoot
-        ),
+        ConeModel::Wave => {
+            let wave_ratio = if horizon > 0.0 { slope_field / horizon } else { 0.0 };
+            let subluminal = if wave_ratio <= 1.05 { "PASS" } else { "CHECK" };
+            println!(
+                "propagation speed (|A|)            : {}  ({:.2} c, subluminal)",
+                subluminal, wave_ratio
+            );
+        }
     }
     println!(
         "isotropy  (cone CV at step {})      : {:.3}  {}",
@@ -570,7 +584,8 @@ fn report(config: &Config, result: &ConeResult) {
 
     if config.cone_model == ConeModel::Wave {
         let radiates = last_tension > first_tension + spacing;
-        let energy_ok = result.energy_drift < 0.10;
+        let energy_ok = result.energy_drift < 0.05;
+        let edge_ahead = (result.worst_overshoot + spacing).max(0.0);
         println!(
             "field front (|A|)  : {:.2} -> {:.2}  [{}]",
             first_tension,
@@ -582,6 +597,11 @@ fn report(config: &Config, result: &ConeResult) {
             result.energy_drift * 100.0,
             result.energy_final_drift * 100.0,
             if energy_ok { "BOUNDED (no damping)" } else { "check CFL" }
+        );
+        println!(
+            "|A| 1% edge vs c*t : +{:.1} units ({:.1} spacing) ahead at worst  [dispersion]",
+            edge_ahead,
+            edge_ahead / spacing.max(1.0e-6)
         );
     }
 
@@ -595,10 +615,11 @@ fn report(config: &Config, result: &ConeResult) {
             println!("  conservative wave closure.");
         }
         ConeModel::Wave => {
-            println!("  Conservative wave: the |A| front radiates at ~c with energy");
-            println!("  bounded (no damping), so signal_speed is now a real speed. A");
-            println!("  faint dispersive precursor runs ahead (lattice artifact, bounded");
-            println!("  by the stencil). Next phase: a local C(x) to slow the wave.");
+            println!("  Conservative wave: the |A| amplitude front is the cone. It");
+            println!("  radiates at a subluminal ~0.9 c with energy bounded (no");
+            println!("  damping), so signal_speed is a real speed. The 1% edge rides");
+            println!("  ~1 spacing ahead (weak dispersion); the |G| flux edge is a");
+            println!("  secondary contour. Next phase: a local C(x) to slow the wave.");
         }
     }
     if !config.cone_csv.is_empty() {

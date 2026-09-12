@@ -287,12 +287,17 @@ Hamiltonian; a symplectic leapfrog then has no systematic energy drift.
 
 **Acceptance criteria (wave).**
 
-- The $|A|$ amplitude front radiates at $\sim c$ (so `signal_speed` is a real
-  speed, not a neighbor cutoff).
+- The $|A|$ amplitude-front speed is subluminal ($\lesssim c$) and is the
+  official cone number, so `signal_speed` is a real speed, not a neighbor cutoff.
 - Total energy stays bounded (no damping) — the direct refutation of the
   relaxational decay.
 - The wavefront is isotropic.
-- Finite propagation holds: nothing outruns the operator stencil.
+
+The integrator is a synchronized velocity-Verlet (kick-drift-kick) step, which
+keeps the measured energy drift second-order small. The $|A|$ 1% contour rides
+about one sample spacing ahead of $c\,t$ (weak lattice dispersion) and the $|G|$
+flux edge is a secondary contour; both are reported as diagnostics, not gated
+criteria.
 
 **Caveats and open items.**
 

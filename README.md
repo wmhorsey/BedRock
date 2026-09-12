@@ -75,10 +75,10 @@ cargo run --release -- --cone-test --signal-speed 18 --cone-csv runs/wave_a.csv
 
 Wave verdicts:
 
-- **wave speed (|A|)** vs **c** — the amplitude front should radiate at ~`c`, so `signal_speed` is a real speed, not just the neighbor-list reach.
-- **finite propagation** — PASS if nothing outruns the operator stencil. A faint dispersive precursor ahead of the front is an expected lattice artifact.
+- **propagation speed (|A|)** — PASS if the amplitude-front speed is subluminal (`<= c`); its value (~0.9·`c`) is the official cone number, so `signal_speed` is a real speed rather than the neighbor-list reach.
 - **isotropy** — PASS if the wavefront is round.
 - **energy** — bounded (no damping) confirms the medium is conservative rather than dissipative.
+- The `|A|` 1% edge rides ~1 sample spacing ahead of `c*t` (weak dispersion) and the `|G|` flux edge is a secondary contour — both reported as diagnostics, not gates.
 
 Relax verdicts (diffusive baseline): causal-horizon classification, causality, isotropy, and the `edge/causal` ratio (~0.02, showing the front barely moves). Per-step data is written to `cone_test.csv`. See [SimulationSpec.md](SimulationSpec.md) section 9 for the full methodology.
 

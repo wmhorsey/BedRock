@@ -156,11 +156,19 @@ impl WaveField {
         }
     }
 
-    /// One symplectic (staggered) leapfrog step of the conservative wave.
+    /// One synchronized velocity-Verlet (kick-drift-kick) step of the
+    /// conservative wave. Keeping A and G at the same time level makes the
+    /// measured energy oscillation second-order small (a plain symplectic-Euler
+    /// staggering leaves a first-order swing).
     pub fn step(&mut self) {
         let c_dt = self.c * self.dt;
+        self.kick_flux(0.5 * c_dt);
+        self.drift_field(c_dt);
+        self.kick_flux(0.5 * c_dt);
+    }
 
-        // Update flux from grad(A): dG/dt = -c grad(A).
+    /// Flux kick: `G -= factor * grad(A)`.
+    fn kick_flux(&mut self, factor: f32) {
         let new_g: Vec<Vector2<f32>> = (0..self.len())
             .into_par_iter()
             .map(|i| {
@@ -169,13 +177,14 @@ impl WaveField {
                 for pair in &self.pairs[i] {
                     grad += pair.dir * (pair.weight * (self.a[pair.j] - ai));
                 }
-                self.g[i] - grad * c_dt
+                self.g[i] - grad * factor
             })
             .collect();
         self.g = new_g;
+    }
 
-        // Update field from div(G) using the freshly updated flux:
-        // dA/dt = -c div(G), with div = -grad^T so total energy is conserved.
+    /// Field drift: `A -= factor * div(G)`, with div = -grad^T (energy-conserving).
+    fn drift_field(&mut self, factor: f32) {
         let new_a: Vec<f32> = (0..self.len())
             .into_par_iter()
             .map(|i| {
@@ -184,7 +193,7 @@ impl WaveField {
                 for pair in &self.pairs[i] {
                     div += pair.weight * (gi + self.g[pair.j]).dot(&pair.dir);
                 }
-                self.a[i] - c_dt * div
+                self.a[i] - factor * div
             })
             .collect();
         self.a = new_a;
