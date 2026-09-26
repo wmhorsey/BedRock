@@ -1,6 +1,6 @@
-# Axioms of the Aptik Substrate Field Ontology (Version 2.3)
+# Axioms of the Aptik Substrate Field Ontology (Version 2.4)
 
-*April 2026 — Mike (CerynNekoi)*
+*September 2026 — Mike (CerynNekoi)*
 
 ## Abstract
 
@@ -34,7 +34,25 @@ The substrate is described by a single self-interacting scalar field $A(\mathbf{
 
 3. **Core–ambient continuum**
 
-   Every core is defined by $\Delta A = A_{\text{amb}} - A_{\text{core}}$ and lies on a single continuum: void if $\Delta A > 0$, depression if $\Delta A \approx 0$ (relative to the local ambient scale), spike if $\Delta A < 0$.
+   Cores are classified by the core field height $A_{\text{core}}$ against true zero and the local ambient $A_{\text{amb}}$:
+
+   $$
+   \begin{aligned}
+   \text{void:} &\quad A_{\text{core}} = 0 \\
+   \text{depression:} &\quad 0 < A_{\text{core}} < A_{\text{amb}} \\
+   \text{matched / condensate:} &\quad A_{\text{core}} \approx A_{\text{amb}} \\
+   \text{spike:} &\quad A_{\text{core}} > A_{\text{amb}}
+   \end{aligned}
+   $$
+
+   $\Delta A = A_{\text{amb}} - A_{\text{core}}$ is only a derived contrast score, not the classifier:
+
+   - void: $\Delta A = A_{\text{amb}}$
+   - depression: $0 < \Delta A < A_{\text{amb}}$
+   - matched / condensate: $\Delta A \approx 0$
+   - spike: $\Delta A < 0$
+
+   Do not read a larger $\Delta A$ as “more stuff.” Larger $\Delta A$ means emptier relative to ambient.
 
 4. **Universal structure of entities**
 
@@ -50,7 +68,7 @@ The substrate is described by a single self-interacting scalar field $A(\mathbf{
 
 7. **Scale breaking by voids**
 
-   Only void cores break scale, with $A_{\text{core}} = 0$. All other structures scale with ambient.
+   Only void cores break scale, with $A_{\text{core}} = 0$. Depressions, matched cores, and spikes scale with ambient.
 
 8. **Bound Substrate Restriction (Mass Definition)**
 
@@ -76,15 +94,17 @@ The substrate is described by a single self-interacting scalar field $A(\mathbf{
 
 12. **Dynamic Shell and Tension Release**
 
-    At the shell surface (maximum $|\nabla A|$), high-tension regions drive inward flows while trapped low-tension regions ($\Delta A > 0$) are released outward as low-tension quasi-particles. Energy is transferred locally via gradients (Axiom 0).
+    At the shell surface (maximum $|\nabla A|$), high-tension regions drive inward flows while trapped low-tension regions ($A < A_{\text{amb}}$, i.e. voids and depressions) are released outward as low-tension quasi-particles. Energy is transferred locally via gradients (Axiom 0).
 
 13. **Curvature-Driven Horizon Dynamics**
 
     Tighter outer curvature produces stronger local gradients and more frequent/intense quasi-particle release (energy conserved via Axiom 0).
 
-14. **Depression Cores as Substrate Condensates**
+14. **Depression cores and ambient-matched condensates**
 
-    A depression core ($\Delta A \approx 0$) is a metastable, coherent pocket of trapped substrate energy.
+    A depression core ($0 < A_{\text{core}} < A_{\text{amb}}$) is a partial hole: substrate remains inside the core, but below the local room level. It does not break scale.
+
+    An ambient-matched core ($A_{\text{core}} \approx A_{\text{amb}}$) is a metastable, coherent pocket of trapped substrate energy sitting at room level. It is not a dent and not a spike.
 
 15. **Hierarchical Shell Structure and Ambient Inheritance**
 
